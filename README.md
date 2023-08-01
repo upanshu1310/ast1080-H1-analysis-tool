@@ -2,7 +2,9 @@
 rtl-sdr based 21 cm hydrogen line recording and analysis GUI tool.
 Required Anaconda/Miniconda installed.
 
-Download the files to your local computer.
+The csv files ground.csv, sky.csv, source.csv, gui_record.csv, gui_save.csv and gui_vel.csv are test files for checking the functioning of the code.
+
+Download all the files to your local computer.
 
 Install Anaconda / miniconda
 
