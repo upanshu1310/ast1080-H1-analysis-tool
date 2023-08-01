@@ -29,7 +29,7 @@ A) Windows installation:
   
 	run gui with the following command in anaconda/miniconda terminal.
 	4. python GUI.py
-	# you need not run step 1 and 2 again. Only run step 3 in anaconda/miniconda terminal to run GUI.	
+	# you need not run step 1, 2 and 3 again. Only run step 3 in anaconda/miniconda terminal to run GUI.	
 
 B) Linux/Mac
 	
@@ -40,5 +40,5 @@ B) Linux/Mac
  	3. (For linux) if required, blacklist rtl2832 driver. Details can be found at (https://sdr-enthusiasts.gitbook.io/ads-b/setting-up-rtl-sdrs/blacklist-kernel-modules).
 	4. python ./GUI.py
 
-	# you need not run step 1 and 2 again. Only run step 3 in anaconda/miniconda terminal to run GUI.	
+	# you need not run step 1, 2 and 3 again. Only run step 3 in anaconda/miniconda terminal to run GUI.	
 	
