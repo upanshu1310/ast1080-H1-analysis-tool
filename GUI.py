@@ -83,23 +83,20 @@ def record_and_plot_data():
         command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '+file_name
         os.system(command)
 
-        with open(file_name, mode ='r')as file:
-            csvFile = csv.reader(file)
+        #with open(file_name, mode ='r')as file:
+        csvFile = pd.read_csv(file_path, header=None)
            
             
-            for columns in csvFile:
-                #data = columns;
-                l = len(columns);
-                # print(l)
-                ydBs = columns[6:l+1];
-                ydB = [float(ele) for ele in ydBs]; # convert values from string to float
-                # print(ydB)
+        x_start = csvFile.iloc[0, 2] / 1e6
+        x_stop = csvFile.iloc[0, 3] / 1e6
+        x_data = np.linspace(x_start, x_stop, num=len(csvFile.columns) - 6)
+        y_data = csvFile.iloc[0, 6:].values.astype(float)
           
-            ax.plot(ydB)
-            ax.set_xlabel('Frequency bin number')
-            ax.set_ylabel('Power (dBm)')
-            ax.set_title('Recorded Data')
-            canvas.draw()
+        ax.plot(x_data,y_data)
+        ax.set_xlabel('Frequency (MHz)')
+        ax.set_ylabel('Power (dBm)')
+        ax.set_title('Recorded Data')
+        canvas.draw()
         message = f"Data recorded and plotted from {file_name}"
         add_message(message)
         
