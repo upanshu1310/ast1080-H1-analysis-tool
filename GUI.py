@@ -19,15 +19,23 @@ import matplotlib.pyplot as plt
 import math
 import datetime
 from PyAstronomy import pyasl
+import subprocess, shlex
+import time
+import signal
 
 
 # Default values for sky_temp and ground_temp
 sky_temp = 5
 ground_temp = 300
-
+recording = False
 # Variables to store selected points for receiver temperature correction
 point1 = None
 point2 = None
+
+# Lists to store checkboxes and their states
+states = []
+buttons = []
+currentFolder = None
 
 # Dictionary to store the plotted data
 plot_data_dict = {}
@@ -65,41 +73,100 @@ def update_messages_display():
         messages.insert(tk.END, message + '\n')
     messages.config(state=tk.DISABLED)
 
+def startTimer(timeleft):
+    t = timeleft
+    if not recording:
+        start_freq_entry.config(state='normal')
+        stop_freq_entry.config(state='normal')
+        bin_sz_entry.config(state='normal')
+        gain_entry.config(state='normal')
+        int_time_entry.config(state='normal')
+        int_time_entry.delete(0, tk.END)
+        int_time_entry.insert(0, str(t))
+        time_left_label.config(text=f"Time left:".ljust(16,' '))
+        record_data_button.config(text="Record Data".ljust(14,' '))
+        root_window.update()
+    elif recording:
+        time_left_label.config(text=f"Time left: {timeleft} s".ljust(16,' '))
+        start_freq_entry.config(state='disabled')
+        stop_freq_entry.config(state='disabled')
+        bin_sz_entry.config(state='disabled')
+        gain_entry.config(state='disabled')
+        int_time_entry.delete(0, tk.END)
+        int_time_entry.insert(0, f"Recording {t}s of data")
+        int_time_entry.config(state='disabled')
+        root_window.update()
+        while timeleft > 0:
+            if not recording:
+                break
+            time.sleep(1)
+            timeleft -= 1
+            time_left_label.config(text=f"Time left: {timeleft} s".ljust(16,' '))
+            root_window.update()
+        start_freq_entry.config(state='normal')
+        stop_freq_entry.config(state='normal')
+        bin_sz_entry.config(state='normal')
+        gain_entry.config(state='normal')
+        int_time_entry.config(state='normal')
+        int_time_entry.delete(0, tk.END)
+        int_time_entry.insert(0, str(t))
+        time_left_label.config(text=f"Time left:".ljust(16,' '))
+        record_data_button.config(text="Record Data".ljust(14,' '))
+        root_window.update()
 
 def record_and_plot_data():
-    file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
-    if file_path:
-        file_dir = os.path.dirname(file_path)
-        file_name = os.path.basename(file_path)
-        os.chdir(file_dir)
+    global p
+    global recording
 
-        # enter start frequency
-        start_freq = start_freq_entry.get()
-        stop_freq = stop_freq_entry.get()
-        bin_sz = bin_sz_entry.get()
-        gain = gain_entry.get()
-        int_time = int_time_entry.get()
+    if recording:
+        p.terminate()
+        p.wait()
+        # print(p.pid)
+        # os.kill(p.pid, signal.SIGKILL)
+        recording = False
+        # record_data_button.config(text="Record Data")
+        startTimer(60)
+        root_window.update()
 
-        command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '+file_name
-        os.system(command)
+    else:
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
+        if file_path:
+            file_dir = os.path.dirname(file_path)
+            file_name = os.path.basename(file_path)
+            os.chdir(file_dir)
 
-        #with open(file_name, mode ='r')as file:
-        csvFile = pd.read_csv(file_path, header=None)
-           
+            # enter start frequency
+            start_freq = start_freq_entry.get()
+            stop_freq = stop_freq_entry.get()
+            bin_sz = bin_sz_entry.get()
+            gain = gain_entry.get()
+            int_time = int_time_entry.get()
+
+            command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '+file_name
+            args = shlex.split(command)
             
-        x_start = csvFile.iloc[0, 2] / 1e6
-        x_stop = csvFile.iloc[0, 3] / 1e6
-        x_data = np.linspace(x_start, x_stop, num=len(csvFile.columns) - 6)
-        y_data = csvFile.iloc[0, 6:].values.astype(float)
-          
-        ax.plot(x_data,y_data)
-        ax.set_xlabel('Frequency (MHz)')
-        ax.set_ylabel('Power (dBm)')
-        ax.set_title('Recorded Data')
-        canvas.draw()
-        message = f"Data recorded and plotted from {file_name}"
-        add_message(message)
-        
+            p = subprocess.Popen(args, start_new_session=True)
+            record_data_button.config(text="Stop Recording")
+            recording = True
+            startTimer(int(int_time))
+
+            #with open(file_name, mode ='r')as file:
+            csvFile = pd.read_csv(file_path, header=None)
+            
+                
+            x_start = csvFile.iloc[0, 2] / 1e6
+            x_stop = csvFile.iloc[0, 3] / 1e6
+            x_data = np.linspace(x_start, x_stop, num=len(csvFile.columns) - 6)
+            y_data = csvFile.iloc[0, 6:].values.astype(float)
+            
+            ax.plot(x_data,y_data)
+            ax.set_xlabel('Frequency (MHz)')
+            ax.set_ylabel('Power (dBm)')
+            ax.set_title('Recorded Data')
+            canvas.draw()
+            message = f"Data recorded and plotted from {file_name}"
+            add_message(message)
+
 def clear_plot():
     # Clear the plot in the first tab
     ax.clear()
@@ -120,8 +187,11 @@ def open_file_and_record():
         message = f"Data recorded and plotted from {file_path}"
         add_message(message)
 
-def open_file_and_plot(file_type, ax):
-    file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+def open_file_and_plot(file_type, ax, filegiven=None, multiple=False):
+    if filegiven is None:
+        file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+    else:
+        file_path = filegiven
     if file_path:
         df = pd.read_csv(file_path, header=None)
         x_start = df.iloc[0, 2] / 1e6
@@ -136,11 +206,62 @@ def open_file_and_plot(file_type, ax):
         source_date_time_str = df.iloc[0, 0] + " " + df.iloc[0, 1]
         source_date_time = datetime.datetime.strptime(source_date_time_str, '%Y-%m-%d %H:%M:%S')
 
-        plot_data(file_type, x_data, y_data, ax, file_name)
-        message = f"{file_type} data plotted from {file_path}"
-        add_message(message)
+        if multiple:
+            plot_multiple_data(x_data, y_data, ax, file_name)
+            message = f"Data plotted from {file_path}"
+            add_message(message)
+        else:    
+            plot_data(file_type, x_data, y_data, ax, file_name, multiple)
+            message = f"{file_type} data plotted from {file_path}"
+            add_message(message)
 
-def plot_data(file_type, x_data, y_data, ax, file_name):
+
+def open_multiple_files_and_plot():
+    global states
+    global buttons
+    multiple_ax_temperature.cla()
+    multiple_canvas_temperature.draw()
+    # print([val.get() for val in states])
+    for i in range(len(buttons)):
+        if states[i].get() == 1:
+            filename = buttons[i].cget("text")
+            filepath = currentFolder+"/"+filename
+            try:
+                open_file_and_plot(None, multiple_ax_temperature,filepath,multiple=True)
+            except:
+                continue
+
+def open_folder():
+    folderpath = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+    folderpath = os.path.dirname(folderpath)
+    global buttons
+    global states
+    global currentFolder
+    if folderpath:
+        currentFolder = folderpath
+        for button in buttons:
+            button.pack_forget()
+        buttons = []
+        for file in os.listdir(folderpath):
+            if file.endswith('.csv'):
+                temp_var = tk.IntVar()
+                temp = tk.Checkbutton(plot_multiple_tab, text=file, variable=temp_var)
+                temp.pack(side=tk.LEFT)
+                buttons.append(temp)
+                states.append(temp_var)
+            else:
+                continue
+    root_window.update()
+
+def plot_multiple_data(x_data, y_data, ax, file_name):
+    ax.plot(x_data, y_data, label=file_name)
+    ax.set_xlabel('Frequency (MHz)')
+    ax.set_ylabel('Power (Watts)')
+    ax.set_title('CSV Data Plot')
+    ax.legend()
+    multiple_canvas_temperature.draw()
+
+def plot_data(file_type, x_data, y_data, ax, file_name, multiple):
     if file_type in plot_data_dict:
         plot_data_dict[file_type]['line'].remove()
     plot_data_dict[file_type] = {'x_data': x_data, 'y_data': y_data, 'line': None}
@@ -149,7 +270,10 @@ def plot_data(file_type, x_data, y_data, ax, file_name):
     ax.set_ylabel('Power (Watts)')
     ax.set_title('CSV Data Plot')
     ax.legend()
-    canvas_temperature.draw()
+    if multiple:
+        multiple_canvas_temperature.draw()
+    else:
+        canvas_temperature.draw()
 
 def set_sky_temperature():
     global sky_temp
@@ -453,6 +577,8 @@ def set_source_coordinates():
 
 root_window = tk.Tk()
 root_window.title("CSV Data Plotter")
+# root_window.geometry("800x600")
+# root_window.maxsize(800,600)
 
 # Create a tabbed interface
 tab_control = ttk.Notebook(root_window)
@@ -471,57 +597,78 @@ tab_control.add(record_data_tab, text="Record Data")
 
 # User input fields
 start_freq_label = tk.Label(record_data_tab, text="Start Frequency:")
-start_freq_label.pack(anchor="w")
+# start_freq_label.pack(anchor="w")
+start_freq_label.grid(row=0,pady=(25,0))
 start_freq_entry = tk.Entry(record_data_tab, width=20)
 start_freq_entry.insert(0, '1419.405751M')
-start_freq_entry.pack(anchor="w")
+# start_freq_entry.pack(anchor="w")
+start_freq_entry.grid(row=0,column=1,pady=(25,0))
+
 
 stop_freq_label = tk.Label(record_data_tab, text="Stop Frequency:")
-stop_freq_label.pack(anchor="w")
+# stop_freq_label.pack(anchor="w")
+stop_freq_label.grid(row=1)
 stop_freq_entry = tk.Entry(record_data_tab, width=20)
 stop_freq_entry.insert(0, '1421.405751M')
-stop_freq_entry.pack(anchor="w")
+# stop_freq_entry.pack(anchor="w")
+stop_freq_entry.grid(row=1,column=1)
 
 bin_sz_label = tk.Label(record_data_tab, text="Bin Size:")
-bin_sz_label.pack(anchor="w")
+# bin_sz_label.pack(anchor="w")
+bin_sz_label.grid(row=2)
 bin_sz_entry = tk.Entry(record_data_tab, width=20)
 bin_sz_entry.insert(0, '4k')
-bin_sz_entry.pack(anchor="w")
+# bin_sz_entry.pack(anchor="w")
+bin_sz_entry.grid(row=2,column=1)
 
 gain_label = tk.Label(record_data_tab, text="Gain:")
-gain_label.pack(anchor="w")
+# gain_label.pack(anchor="w")
+gain_label.grid(row=3)
 gain_entry = tk.Entry(record_data_tab, width=20)
 gain_entry.insert(0, '50')
-gain_entry.pack(anchor="w")
+# gain_entry.pack(anchor="w")
+gain_entry.grid(row=3,column=1)
 
 int_time_label = tk.Label(record_data_tab, text="Integration Time:")
-int_time_label.pack(anchor="w")
+# int_time_label.pack(anchor="w")
+int_time_label.grid(row=4)
 int_time_entry = tk.Entry(record_data_tab, width=20)
 int_time_entry.insert(0, '60')
-int_time_entry.pack(anchor="w")
+# int_time_entry.pack(anchor="w")
+int_time_entry.grid(row=4,column=1)
 
-record_data_button = tk.Button(record_data_tab, text="Record Data", command=record_and_plot_data)
-record_data_button.pack(side=tk.LEFT, padx=5, pady=5)
+record_data_button = tk.Button(record_data_tab, text="Record Data".ljust(14,' '), command=record_and_plot_data)
+# record_data_button.pack(side=tk.LEFT, padx=5, pady=5)
+record_data_button.grid(row=0,column=3,sticky="w",rowspan=3)
 
 # Add a "Clear Plot" button
 clear_plot_button = tk.Button(record_data_tab, text="Clear Plot", command=clear_plot)
-clear_plot_button.pack(side=tk.LEFT, padx=5, pady=5)
+# clear_plot_button.pack(side=tk.LEFT, padx=5, pady=5)
+clear_plot_button.grid(row=3,column=3,sticky="w",rowspan=2)
+
+# Add a time left text
+time_left_label = tk.Label(record_data_tab, text="Time left:".ljust(16,' '))
+# time_left_label.pack(anchor="w")
+time_left_label.grid(row=0,column=4,pady=30,padx=20,rowspan=5,sticky="w")
+time_left_label.config(font=("Courier", 32))
 
 # Create a container for the plot and toolbar
 plot_frame = tk.Frame(record_data_tab)
-plot_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+# plot_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+plot_frame.grid(row=5,column=0,padx=10,pady=10,columnspan=5,sticky='nesw')
 
 # Create a matplotlib figure
-fig = Figure(figsize=(2, 2), dpi=100)
+fig = Figure(figsize=(8, 3), dpi=100)
 ax = fig.add_subplot(111)
 
 # Create a canvas for the figure
 canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+# canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+canvas.get_tk_widget().grid(row=5,column=0,padx=20,pady=20,columnspan=5,sticky='nesw')
 
 # Create a label to display the file name
 file_name_label = tk.Label(record_data_tab, text="")
-file_name_label.pack(side=tk.LEFT, padx=5, pady=5)
+# file_name_label.pack(side=tk.LEFT, padx=5, pady=5)
 
 # Second tab: "Plot Data" window
 plot_data_tab = ttk.Frame(tab_control)
@@ -553,6 +700,33 @@ plot_sky_button.pack(side=tk.LEFT, padx=5, pady=5)
 
 plot_source_button = tk.Button(plot_data_tab, text="Plot Source Data", command=lambda: open_file_and_plot('Source', ax_temperature))
 plot_source_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+# Second (a) tab: "Plot Multiple" window
+plot_multiple_tab = ttk.Frame(tab_control)
+tab_control.add(plot_multiple_tab, text="Plot Multiple")
+
+# Create a container for the plot and toolbar
+plot_multiple_frame = tk.Frame(plot_multiple_tab)
+plot_multiple_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+# Create a Matplotlib figure and axis for the plot
+multiple_fig_temperature = Figure(figsize=(2, 2), dpi=100)
+multiple_ax_temperature = multiple_fig_temperature.add_subplot(111)
+
+# Create a container for the plot
+multiple_canvas_temperature = FigureCanvasTkAgg(multiple_fig_temperature, master=plot_multiple_frame)
+multiple_canvas_temperature.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+# Add NavigationToolbar for zooming and panning
+multiple_toolbar_temperature = NavigationToolbar2Tk(multiple_canvas_temperature, plot_multiple_frame)
+multiple_toolbar_temperature.update()
+multiple_toolbar_temperature.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=False)
+
+plot_multiple_source_button = tk.Button(plot_multiple_tab, text="Open folder", command=lambda: open_folder())
+plot_multiple_source_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+plot_multiple_button = tk.Button(plot_multiple_tab, text="Plot", command=lambda: open_multiple_files_and_plot())
+plot_multiple_button.pack(side=tk.LEFT, padx=5, pady=5)
 
 # Third tab: "Temperature Calibration" window
 temp_calibration_tab = ttk.Frame(tab_control)
