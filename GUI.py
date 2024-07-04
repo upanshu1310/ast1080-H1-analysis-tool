@@ -150,7 +150,7 @@ def record_and_plot_data():
             recording = True
             time.sleep(1)
             startTimer(int(int_time))
-            time.sleep(1)
+            # time.sleep(1)
 
             #with open(file_name, mode ='r')as file:
             csvFile = pd.read_csv(file_path, header=None)
@@ -660,7 +660,7 @@ plot_frame = tk.Frame(record_data_tab)
 plot_frame.grid(row=5,column=0,padx=10,pady=10,columnspan=5,sticky='nesw')
 
 # Create a matplotlib figure
-fig = Figure(figsize=(8, 3), dpi=100)
+fig = Figure(figsize=(8, 6), dpi=100)
 ax = fig.add_subplot(111)
 
 # Create a canvas for the figure
