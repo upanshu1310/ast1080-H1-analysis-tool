@@ -148,8 +148,9 @@ def record_and_plot_data():
             p = subprocess.Popen(args, start_new_session=True)
             record_data_button.config(text="Stop Recording")
             recording = True
+            time.sleep(1)
             startTimer(int(int_time))
-            time.sleep(2)
+            time.sleep(1)
 
             #with open(file_name, mode ='r')as file:
             csvFile = pd.read_csv(file_path, header=None)
