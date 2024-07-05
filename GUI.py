@@ -73,29 +73,35 @@ def update_messages_display():
         messages.insert(tk.END, message + '\n')
     messages.config(state=tk.DISABLED)
 
+def enable_fields(time):
+    start_freq_entry.config(state='normal')
+    stop_freq_entry.config(state='normal')
+    bin_sz_entry.config(state='normal')
+    gain_entry.config(state='normal')
+    int_time_entry.config(state='normal')
+    int_time_entry.delete(0, tk.END)
+    int_time_entry.insert(0, str(time))
+    time_left_label.config(text=f"Time left:".ljust(16,' '))
+    record_data_button.config(text="Record Data".ljust(14,' '))
+    root_window.update()
+
+def disable_fields(time):
+    time_left_label.config(text=f"Time left: {time} s".ljust(16,' '))
+    start_freq_entry.config(state='disabled')
+    stop_freq_entry.config(state='disabled')
+    bin_sz_entry.config(state='disabled')
+    gain_entry.config(state='disabled')
+    int_time_entry.delete(0, tk.END)
+    int_time_entry.insert(0, f"Recording {time}s of data")
+    int_time_entry.config(state='disabled')
+    root_window.update()
+
 def startTimer(timeleft):
     t = timeleft
     if not recording:
-        start_freq_entry.config(state='normal')
-        stop_freq_entry.config(state='normal')
-        bin_sz_entry.config(state='normal')
-        gain_entry.config(state='normal')
-        int_time_entry.config(state='normal')
-        int_time_entry.delete(0, tk.END)
-        int_time_entry.insert(0, str(t))
-        time_left_label.config(text=f"Time left:".ljust(16,' '))
-        record_data_button.config(text="Record Data".ljust(14,' '))
-        root_window.update()
+        enable_fields(t)
     elif recording:
-        time_left_label.config(text=f"Time left: {timeleft} s".ljust(16,' '))
-        start_freq_entry.config(state='disabled')
-        stop_freq_entry.config(state='disabled')
-        bin_sz_entry.config(state='disabled')
-        gain_entry.config(state='disabled')
-        int_time_entry.delete(0, tk.END)
-        int_time_entry.insert(0, f"Recording {t}s of data")
-        int_time_entry.config(state='disabled')
-        root_window.update()
+        disable_fields(t)
         while timeleft > 0:
             if not recording:
                 break
@@ -103,16 +109,7 @@ def startTimer(timeleft):
             timeleft -= 1
             time_left_label.config(text=f"Time left: {timeleft} s".ljust(16,' '))
             root_window.update()
-        start_freq_entry.config(state='normal')
-        stop_freq_entry.config(state='normal')
-        bin_sz_entry.config(state='normal')
-        gain_entry.config(state='normal')
-        int_time_entry.config(state='normal')
-        int_time_entry.delete(0, tk.END)
-        int_time_entry.insert(0, str(t))
-        time_left_label.config(text=f"Time left:".ljust(16,' '))
-        record_data_button.config(text="Record Data".ljust(14,' '))
-        root_window.update()
+        enable_fields(t)
 
 def record_and_plot_data():
     global p
@@ -121,11 +118,9 @@ def record_and_plot_data():
     if recording:
         p.terminate()
         p.wait()
-        # print(p.pid)
-        # os.kill(p.pid, signal.SIGKILL)
         recording = False
         # record_data_button.config(text="Record Data")
-        startTimer(60)
+        # startTimer(60)
         root_window.update()
 
     else:
