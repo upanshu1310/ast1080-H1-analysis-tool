@@ -83,6 +83,8 @@ def enable_fields(time):
     int_time_entry.insert(0, str(time))
     time_left_label.config(text=f"Time left:".ljust(16,' '))
     record_data_button.config(text="Record Data".ljust(14,' '))
+    az_entry.config(state='normal')
+    alt_entry.config(state='normal')
     root_window.update()
 
 def disable_fields(time):
@@ -94,6 +96,8 @@ def disable_fields(time):
     int_time_entry.delete(0, tk.END)
     int_time_entry.insert(0, f"Recording {time}s of data")
     int_time_entry.config(state='disabled')
+    az_entry.config(state='disabled')
+    alt_entry.config(state='disabled')
     root_window.update()
 
 def startTimer(timeleft):
@@ -136,19 +140,41 @@ def record_and_plot_data():
             bin_sz = bin_sz_entry.get()
             gain = gain_entry.get()
             int_time = int_time_entry.get()
+            azimuth = az_entry.get()
+            altitude = alt_entry.get()
 
             command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '+file_name
             args = shlex.split(command)
             
-            p = subprocess.Popen(args, start_new_session=True)
+            p = subprocess.Popen(args, bufsize=1, start_new_session=True)
             record_data_button.config(text="Stop Recording")
             recording = True
             time.sleep(1)
             startTimer(int(int_time))
-            # time.sleep(1)
+            time.sleep(1)
+
+        header = ["date_time", "filename", "az", "alt", "integration_time"]
+        log_row = [time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), file_name, azimuth, altitude, int_time]
+        # print(log_row)
+
+        if 'log.csv' in os.listdir(file_dir):
+            with open('log.csv', 'a') as file:
+                writer = csv.writer(file)
+                writer.writerow(log_row)
+        else:
+            with open('log.csv', 'w', newline='') as file:
+                writer = csv.writer(file) 
+                writer.writerow(header)
+                writer.writerow(log_row)
+
+        with open(file_name,'a') as file:
+            writer = csv.writer(file)
+            time_now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            writer.writerow([f"# {time_now}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s"])
+        
 
         #with open(file_name, mode ='r')as file:
-        csvFile = pd.read_csv(file_path, header=None)
+        csvFile = pd.read_csv(file_path, header=None, comment='#')
         
             
         x_start = csvFile.iloc[0, 2] / 1e6
@@ -180,7 +206,7 @@ def clear_plot():
 def open_file_and_record():
     file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
     if file_path:
-        df = pd.read_csv(file_path, header=None)
+        df = pd.read_csv(file_path, header=None, comment="#")
         message = f"Data recorded and plotted from {file_path}"
         add_message(message)
 
@@ -190,7 +216,7 @@ def open_file_and_plot(file_type, ax, filegiven=None, multiple=False):
     else:
         file_path = filegiven
     if file_path:
-        df = pd.read_csv(file_path, header=None)
+        df = pd.read_csv(file_path, header=None, comment="#")
         x_start = df.iloc[0, 2] / 1e6
         x_stop = df.iloc[0, 3] / 1e6
         x_data = np.linspace(x_start, x_stop, num=len(df.columns) - 6)
@@ -634,25 +660,35 @@ int_time_entry.insert(0, '60')
 # int_time_entry.pack(anchor="w")
 int_time_entry.grid(row=4,column=1)
 
+az_label = tk.Label(record_data_tab, text="Azimuth:")
+az_label.grid(row=5)
+az_entry = tk.Entry(record_data_tab, width=20)
+az_entry.grid(row=5,column=1)
+
+alt_label = tk.Label(record_data_tab, text="Altitude:")
+alt_label.grid(row=6)
+alt_entry = tk.Entry(record_data_tab, width=20)
+alt_entry.grid(row=6,column=1)
+
 record_data_button = tk.Button(record_data_tab, text="Record Data".ljust(14,' '), command=record_and_plot_data)
 # record_data_button.pack(side=tk.LEFT, padx=5, pady=5)
-record_data_button.grid(row=0,column=3,sticky="w",rowspan=3)
+record_data_button.grid(row=0,column=3,sticky="w",rowspan=4)
 
 # Add a "Clear Plot" button
 clear_plot_button = tk.Button(record_data_tab, text="Clear Plot", command=clear_plot)
 # clear_plot_button.pack(side=tk.LEFT, padx=5, pady=5)
-clear_plot_button.grid(row=3,column=3,sticky="w",rowspan=2)
+clear_plot_button.grid(row=4,column=3,sticky="w",rowspan=3)
 
 # Add a time left text
 time_left_label = tk.Label(record_data_tab, text="Time left:".ljust(16,' '))
 # time_left_label.pack(anchor="w")
-time_left_label.grid(row=0,column=4,pady=30,padx=20,rowspan=5,sticky="w")
+time_left_label.grid(row=0,column=4,pady=30,padx=20,rowspan=7,sticky="w")
 time_left_label.config(font=("Courier", 32))
 
 # Create a container for the plot and toolbar
 plot_frame = tk.Frame(record_data_tab)
 # plot_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-plot_frame.grid(row=5,column=0,padx=10,pady=10,columnspan=5,sticky='nesw')
+plot_frame.grid(row=7,column=0,padx=10,pady=10,columnspan=5,sticky='nesw')
 
 # Create a matplotlib figure
 fig = Figure(figsize=(8, 6), dpi=100)
@@ -661,7 +697,7 @@ ax = fig.add_subplot(111)
 # Create a canvas for the figure
 canvas = FigureCanvasTkAgg(fig, master=plot_frame)
 # canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-canvas.get_tk_widget().grid(row=5,column=0,padx=20,pady=20,columnspan=5,sticky='nesw')
+canvas.get_tk_widget().grid(row=7,column=0,padx=20,pady=20,columnspan=5,sticky='nesw')
 
 # Create a label to display the file name
 file_name_label = tk.Label(record_data_tab, text="")
