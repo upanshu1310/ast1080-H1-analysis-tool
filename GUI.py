@@ -156,6 +156,7 @@ def record_and_plot_data():
             int_time = int_time_entry.get()
             azimuth = az_entry.get()
             altitude = alt_entry.get()
+            time_now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
             # print(center_freq, bandwidth_freq)
 
@@ -175,8 +176,8 @@ def record_and_plot_data():
             startTimer(int(int_time))
             time.sleep(1)
 
-        header = ["date_time", "filename", "az", "alt", "integration_time"]
-        log_row = [time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), file_name, azimuth, altitude, int_time]
+        header = ["date_time", "filename", "center_freq", "bandwidth", "az", "alt", "integration_time"]
+        log_row = [time_now, file_name, center_freq, bandwidth_freq, azimuth, altitude, int_time]
         # print(log_row)
 
         if 'log.csv' in os.listdir(file_dir):
@@ -191,7 +192,6 @@ def record_and_plot_data():
 
         with open(file_name,'a') as file:
             writer = csv.writer(file)
-            time_now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             writer.writerow([f"# {time_now}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s"])
         
 
