@@ -74,8 +74,8 @@ def update_messages_display():
     messages.config(state=tk.DISABLED)
 
 def enable_fields(time):
-    start_freq_entry.config(state='normal')
-    stop_freq_entry.config(state='normal')
+    center_freq_entry.config(state='normal')
+    bandwidth_entry.config(state='normal')
     bin_sz_entry.config(state='normal')
     gain_entry.config(state='normal')
     int_time_entry.config(state='normal')
@@ -89,8 +89,8 @@ def enable_fields(time):
 
 def disable_fields(time):
     time_left_label.config(text=f"Time left: {time} s".ljust(16,' '))
-    start_freq_entry.config(state='disabled')
-    stop_freq_entry.config(state='disabled')
+    center_freq_entry.config(state='disabled')
+    bandwidth_entry.config(state='disabled')
     bin_sz_entry.config(state='disabled')
     gain_entry.config(state='disabled')
     int_time_entry.delete(0, tk.END)
@@ -115,6 +115,20 @@ def startTimer(timeleft):
             root_window.update()
         enable_fields(t)
 
+def calculate_start_stop_freq(center, bandwidth):
+    center_unit = center[-1]
+    center_value = float(center[:-1])
+    bandwidth_unit = bandwidth[-1]
+    bandwidth_value = float(bandwidth[:-1])
+
+    if center_unit == bandwidth_unit:
+        start_freq = str(center_value - bandwidth_value/2)+"M"
+        stop_freq = str(center_value + bandwidth_value/2)+"M"
+
+    return start_freq, stop_freq
+
+# print(calculate_start_stop_freq("1420.406M", "2M"))
+
 def record_and_plot_data():
     global p
     global recording
@@ -135,16 +149,24 @@ def record_and_plot_data():
             os.chdir(file_dir)
 
             # enter start frequency
-            start_freq = start_freq_entry.get()
-            stop_freq = stop_freq_entry.get()
+            center_freq = center_freq_entry.get()
+            bandwidth_freq = bandwidth_entry.get()
             bin_sz = bin_sz_entry.get()
             gain = gain_entry.get()
             int_time = int_time_entry.get()
             azimuth = az_entry.get()
             altitude = alt_entry.get()
 
+            # print(center_freq, bandwidth_freq)
+
+            # start_freq = center_freq - bandwidth_freq / 2
+            # stop_freq = center_freq + bandwidth_freq / 2
+
+            start_freq, stop_freq = calculate_start_stop_freq(center=center_freq, bandwidth=bandwidth_freq)
+
             command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '+file_name
             args = shlex.split(command)
+            # print(args)
             
             p = subprocess.Popen(args, bufsize=1, start_new_session=True)
             record_data_button.config(text="Stop Recording")
@@ -619,76 +641,90 @@ record_data_tab = ttk.Frame(tab_control)
 tab_control.add(record_data_tab, text="Record Data")
 
 # User input fields
-start_freq_label = tk.Label(record_data_tab, text="Start Frequency:")
-# start_freq_label.pack(anchor="w")
-start_freq_label.grid(row=0,pady=(25,0))
-start_freq_entry = tk.Entry(record_data_tab, width=20)
-start_freq_entry.insert(0, '1419.405751M')
-# start_freq_entry.pack(anchor="w")
-start_freq_entry.grid(row=0,column=1,pady=(25,0))
+center_freq_label = tk.Label(record_data_tab, text="Center Frequency:")
+# center_freq_label.pack(anchor="w")
+center_freq_label.grid(row=0,column=0,pady=(25,0))
+center_freq_entry = tk.Entry(record_data_tab, width=10)
+center_freq_entry.insert(0, '1420.406M')
+# center_freq_entry.pack(anchor="w")
+center_freq_entry.grid(row=0,column=1,sticky="nesw",pady=(25,0))
+center_freq_unit_label = tk.Label(record_data_tab, text="Hz")
+center_freq_unit_label.grid(row=0,column=2,pady=(25,0),sticky="w",padx=(5,0))
 
 
-stop_freq_label = tk.Label(record_data_tab, text="Stop Frequency:")
-# stop_freq_label.pack(anchor="w")
-stop_freq_label.grid(row=1)
-stop_freq_entry = tk.Entry(record_data_tab, width=20)
-stop_freq_entry.insert(0, '1421.405751M')
-# stop_freq_entry.pack(anchor="w")
-stop_freq_entry.grid(row=1,column=1)
+bandwidth_label = tk.Label(record_data_tab, text="Bandwidth:")
+# bandwidth_label.pack(anchor="w")
+bandwidth_label.grid(row=1,column=0)
+bandwidth_entry = tk.Entry(record_data_tab, width=10)
+bandwidth_entry.insert(0, '2M')
+# bandwidth_entry.pack(anchor="w")
+bandwidth_entry.grid(row=1,column=1,sticky="nesw")
+bandwidth_unit_label = tk.Label(record_data_tab, text="Hz")
+bandwidth_unit_label.grid(row=1,column=2,sticky="w",padx=(5,0))
 
 bin_sz_label = tk.Label(record_data_tab, text="Bin Size:")
 # bin_sz_label.pack(anchor="w")
-bin_sz_label.grid(row=2)
-bin_sz_entry = tk.Entry(record_data_tab, width=20)
+bin_sz_label.grid(row=2,column=0)
+bin_sz_entry = tk.Entry(record_data_tab, width=10)
 bin_sz_entry.insert(0, '4k')
 # bin_sz_entry.pack(anchor="w")
-bin_sz_entry.grid(row=2,column=1)
+bin_sz_entry.grid(row=2,column=1,sticky="nesw")
+bin_sz_unit_label = tk.Label(record_data_tab, text="Hz")
+bin_sz_unit_label.grid(row=2,column=2,sticky="w",padx=(5,0))
 
 gain_label = tk.Label(record_data_tab, text="Gain:")
 # gain_label.pack(anchor="w")
-gain_label.grid(row=3)
-gain_entry = tk.Entry(record_data_tab, width=20)
+gain_label.grid(row=3,column=0)
+gain_entry = tk.Entry(record_data_tab, width=10)
 gain_entry.insert(0, '50')
 # gain_entry.pack(anchor="w")
-gain_entry.grid(row=3,column=1)
+gain_entry.grid(row=3,column=1,sticky="nesw")
+gain_unit_label = tk.Label(record_data_tab, text="")
+gain_unit_label.grid(row=3,column=2)
 
 int_time_label = tk.Label(record_data_tab, text="Integration Time:")
 # int_time_label.pack(anchor="w")
-int_time_label.grid(row=4)
-int_time_entry = tk.Entry(record_data_tab, width=20)
+int_time_label.grid(row=4,column=0)
+int_time_entry = tk.Entry(record_data_tab, width=10)
 int_time_entry.insert(0, '60')
 # int_time_entry.pack(anchor="w")
-int_time_entry.grid(row=4,column=1)
+int_time_entry.grid(row=4,column=1,sticky="nesw")
+int_time_unit_label = tk.Label(record_data_tab, text="s")
+int_time_unit_label.grid(row=4,column=2,sticky="w",padx=(5,0))
 
 az_label = tk.Label(record_data_tab, text="Azimuth:")
-az_label.grid(row=5)
-az_entry = tk.Entry(record_data_tab, width=20)
-az_entry.grid(row=5,column=1)
+az_label.grid(row=5,column=0)
+az_entry = tk.Entry(record_data_tab, width=10)
+az_entry.grid(row=5,column=1,sticky="nesw")
+az_unit_label = tk.Label(record_data_tab, text="°")
+az_unit_label.grid(row=5,column=2,sticky="w",padx=(5,0))
 
 alt_label = tk.Label(record_data_tab, text="Altitude:")
-alt_label.grid(row=6)
-alt_entry = tk.Entry(record_data_tab, width=20)
-alt_entry.grid(row=6,column=1)
+alt_label.grid(row=6,column=0)
+alt_entry = tk.Entry(record_data_tab, width=10)
+alt_entry.grid(row=6,column=1,sticky="nesw")
+alt_unit_label = tk.Label(record_data_tab, text="°")
+alt_unit_label.grid(row=6,column=2,sticky="w",padx=(5,0))
 
 record_data_button = tk.Button(record_data_tab, text="Record Data".ljust(14,' '), command=record_and_plot_data)
 # record_data_button.pack(side=tk.LEFT, padx=5, pady=5)
-record_data_button.grid(row=0,column=3,sticky="w",rowspan=4)
+record_data_button.grid(row=0,column=3, pady=(25,0), padx=10, rowspan=2,columnspan=2,sticky="nesw")
 
 # Add a "Clear Plot" button
 clear_plot_button = tk.Button(record_data_tab, text="Clear Plot", command=clear_plot)
 # clear_plot_button.pack(side=tk.LEFT, padx=5, pady=5)
-clear_plot_button.grid(row=4,column=3,sticky="w",rowspan=3)
+clear_plot_button.grid(row=0,column=5, padx=5, pady=(25,0), rowspan=2,columnspan=2,sticky="nesw")
 
 # Add a time left text
 time_left_label = tk.Label(record_data_tab, text="Time left:".ljust(16,' '))
 # time_left_label.pack(anchor="w")
-time_left_label.grid(row=0,column=4,pady=30,padx=20,rowspan=7,sticky="w")
+time_left_label.grid(row=2,column=3, rowspan=5, columnspan=4,sticky="nesw")
 time_left_label.config(font=("Courier", 32))
 
 # Create a container for the plot and toolbar
 plot_frame = tk.Frame(record_data_tab)
 # plot_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-plot_frame.grid(row=7,column=0,padx=10,pady=10,columnspan=5,sticky='nesw')
+plot_frame.grid(row=7,column=0,padx=10,pady=10,columnspan=7,sticky='nesw')
 
 # Create a matplotlib figure
 fig = Figure(figsize=(8, 6), dpi=100)
@@ -697,7 +733,7 @@ ax = fig.add_subplot(111)
 # Create a canvas for the figure
 canvas = FigureCanvasTkAgg(fig, master=plot_frame)
 # canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-canvas.get_tk_widget().grid(row=7,column=0,padx=20,pady=20,columnspan=5,sticky='nesw')
+canvas.get_tk_widget().grid(row=7,column=0,padx=20,pady=20,columnspan=7,sticky='nesw')
 
 # Create a label to display the file name
 file_name_label = tk.Label(record_data_tab, text="")
