@@ -191,8 +191,9 @@ def record_and_plot_data():
                 writer.writerow(log_row)
 
         with open(file_name,'a') as file:
-            writer = csv.writer(file)
-            writer.writerow([f"# {time_now}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s"])
+            file.write(f"# {time_now}, Center:{center_freq}, Bandwidth:{bandwidth_freq}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s")
+            # writer = csv.writer(file)
+            # writer.writerow([f"# {time_now}, Center:{center_freq}, Bandwidth:{bandwidth_freq}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s"])
         
 
         #with open(file_name, mode ='r')as file:
