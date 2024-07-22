@@ -101,6 +101,7 @@ def disable_fields(time):
     root_window.update()
 
 def startTimer(timeleft):
+    global recording
     t = timeleft
     if not recording:
         enable_fields(t)
@@ -114,6 +115,7 @@ def startTimer(timeleft):
             time_left_label.config(text=f"Time left: {timeleft} s".ljust(16,' '))
             root_window.update()
         enable_fields(t)
+        recording = False
 
 def calculate_start_stop_freq(center, bandwidth):
     center_unit = center[-1]
