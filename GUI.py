@@ -76,6 +76,9 @@ def update_messages_display():
 def enable_fields(time):
     center_freq_entry.config(state='normal')
     bandwidth_entry.config(state='normal')
+    if switching_var.get():
+        shift_entry.config(state='normal')
+    switching.config(state='normal')
     bin_sz_entry.config(state='normal')
     gain_entry.config(state='normal')
     int_time_entry.config(state='normal')
@@ -91,6 +94,8 @@ def disable_fields(time):
     time_left_label.config(text=f"Time left: {time} s".ljust(16,' '))
     center_freq_entry.config(state='disabled')
     bandwidth_entry.config(state='disabled')
+    shift_entry.config(state='disabled')
+    switching.config(state='disabled')
     bin_sz_entry.config(state='disabled')
     gain_entry.config(state='disabled')
     int_time_entry.delete(0, tk.END)
@@ -117,19 +122,84 @@ def startTimer(timeleft):
         enable_fields(t)
         recording = False
 
-def calculate_start_stop_freq(center, bandwidth):
+position = [0,-1,0,1]
+
+def calculate_start_stop_freq(center, bandwidth, shift=None, pos=None):
     center_unit = center[-1]
     center_value = float(center[:-1])
     bandwidth_unit = bandwidth[-1]
     bandwidth_value = float(bandwidth[:-1])
 
-    if center_unit == bandwidth_unit:
-        start_freq = str(center_value - bandwidth_value/2)+"M"
-        stop_freq = str(center_value + bandwidth_value/2)+"M"
+    if shift is not None:
+        # shift_unit = shift[-1]
+        shift_value = float(shift[:-1]) 
+        center_value = center_value + shift_value*position[pos]
 
-    return start_freq, stop_freq
+    if center_unit == bandwidth_unit:
+        start_freq = str(round(center_value - bandwidth_value/2,3))+"M"
+        stop_freq = str(round(center_value + bandwidth_value/2,3))+"M"
+
+    return start_freq, stop_freq, str(round(center_value,3))+"M"
 
 # print(calculate_start_stop_freq("1420.406M", "2M"))
+
+header = ["date_time", "filename", "center_freq", "bandwidth", "az", "alt", "integration_time"]
+
+def update_log(directory, filename, center=None, time_=None):
+    if center is None:
+        center_freq = center_freq_entry.get()
+    else:
+        center_freq = center
+
+    bandwidth_freq = bandwidth_entry.get()
+    int_time = int_time_entry.get()
+    azimuth = az_entry.get()
+    altitude = alt_entry.get()
+
+    if time_ is None:
+        time_now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    else:
+        time_now = time_
+
+    log_row = [time_now, filename, center_freq, bandwidth_freq, azimuth, altitude, int_time]
+    # print(log_row)
+
+    if 'log.csv' in os.listdir(directory):
+        with open('log.csv', 'a') as file:
+            writer = csv.writer(file)
+            writer.writerow(log_row)
+    else:
+        with open('log.csv', 'w', newline='') as file:
+            writer = csv.writer(file) 
+            writer.writerow(header)
+            writer.writerow(log_row)
+
+    with open(filename,'a') as file:
+        file.write(f"# {time_now}, Center:{center_freq}, Bandwidth:{bandwidth_freq}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s")
+        # writer = csv.writer(file)
+        # writer.writerow([f"# {time_now}, Center:{center_freq}, Bandwidth:{bandwidth_freq}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s"])
+        
+
+def plot_recorded_data(filepath, filename):
+    csvFile = pd.read_csv(filepath, header=None, comment='#')  
+            
+    x_start = csvFile.iloc[0, 2] / 1e6
+    x_stop = csvFile.iloc[0, 3] / 1e6
+    x_data = np.linspace(x_start, x_stop, num=len(csvFile.columns) - 6)
+    y_data = csvFile.iloc[0, 6:].values.astype(float)
+    
+    ax.plot(x_data,y_data)
+    ax.set_xlabel('Frequency (MHz)')
+    ax.set_ylabel('Power (dBm)')
+    ax.set_title('Recorded Data')
+    canvas.draw()
+    message = f"Data recorded and plotted from {filename}"
+    add_message(message)
+
+def files(path):
+    for file in os.listdir(path):
+        if os.path.isfile(os.path.join(path, file)):
+            yield file
 
 def record_and_plot_data():
     global p
@@ -142,6 +212,70 @@ def record_and_plot_data():
         # record_data_button.config(text="Record Data")
         # startTimer(60)
         root_window.update()
+
+    if switching_var.get():
+
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
+        if file_path and not recording:
+            file_dir = os.path.dirname(file_path)
+            file_name = os.path.basename(file_path)
+            os.chdir(file_dir)
+
+            shift_freq = shift_entry.get()
+            center_freq = center_freq_entry.get()
+            bandwidth_freq = bandwidth_entry.get()
+            bin_sz = bin_sz_entry.get()
+            gain = gain_entry.get()
+            int_time = int_time_entry.get()
+            azimuth = az_entry.get()
+            altitude = alt_entry.get()
+
+            for i in range(4):
+                start_freq, stop_freq, center_freq_from_function = calculate_start_stop_freq(center=center_freq, bandwidth=bandwidth_freq, shift=shift_freq, pos=i)
+                if i == 2:
+                    filename = f"cen2_{center_freq_from_function}_band_{bandwidth_freq}_az{azimuth}_alt{altitude}_{int_time}.csv"
+                else:
+                    filename = f"cen_{center_freq_from_function}_band_{bandwidth_freq}_az{azimuth}_alt{altitude}_{int_time}.csv"
+                command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '+filename
+                # command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '
+                args = shlex.split(command)
+                # print(args)
+                
+                p = subprocess.Popen(args, bufsize=1, start_new_session=True)
+                record_data_button.config(text="Stop Recording")
+                recording = True
+                time.sleep(1)
+                startTimer(int(int_time))
+                recording = True
+                time.sleep(1)
+
+                update_log(directory=file_dir, filename=filename, center=center_freq_from_function)
+                # print(file_dir+'/'+filename)
+                path = file_dir+'/'+filename
+                # print(f"file_path: {file_dir+'/'+filename}\nfile_name: {filename}")
+                # plot_recorded_data(filepath=path, filename=filename)
+
+            newFolder = f"cen{center_freq}_ban{bandwidth_freq}_shift{shift_freq}_{int_time}s"
+            # print(newFolder)
+            # if not os.path.isdir(newFolder):
+            #     print("exists")
+            #     os.chdir(newFolder)
+            #     # shift all files here
+            # else:
+            #     os.makedirs(newFolder)
+            #     print("not exists")
+
+            if not os.path.isdir(newFolder):
+                os.makedirs(newFolder)
+            
+            for file in files(file_dir):
+                if file == 'log.csv':
+                    continue
+                # print(file_dir+'/'+file)
+                os.replace(f"{file_dir}/{file}", f"{file_dir}/{newFolder}/{file}")
+
+
+            return
 
     else:
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
@@ -165,7 +299,7 @@ def record_and_plot_data():
             # start_freq = center_freq - bandwidth_freq / 2
             # stop_freq = center_freq + bandwidth_freq / 2
 
-            start_freq, stop_freq = calculate_start_stop_freq(center=center_freq, bandwidth=bandwidth_freq)
+            start_freq, stop_freq, center_freq_from_function = calculate_start_stop_freq(center=center_freq, bandwidth=bandwidth_freq)
 
             command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '+file_name
             args = shlex.split(command)
@@ -178,42 +312,34 @@ def record_and_plot_data():
             startTimer(int(int_time))
             time.sleep(1)
 
-        header = ["date_time", "filename", "center_freq", "bandwidth", "az", "alt", "integration_time"]
-        log_row = [time_now, file_name, center_freq, bandwidth_freq, azimuth, altitude, int_time]
-        # print(log_row)
+        update_log(directory=file_dir, filename=file_name, time=time_now)
 
-        if 'log.csv' in os.listdir(file_dir):
-            with open('log.csv', 'a') as file:
-                writer = csv.writer(file)
-                writer.writerow(log_row)
-        else:
-            with open('log.csv', 'w', newline='') as file:
-                writer = csv.writer(file) 
-                writer.writerow(header)
-                writer.writerow(log_row)
+        # header = ["date_time", "filename", "center_freq", "bandwidth", "az", "alt", "integration_time"]
+        # log_row = [time_now, file_name, center_freq, bandwidth_freq, azimuth, altitude, int_time]
+        # # print(log_row)
 
-        with open(file_name,'a') as file:
-            file.write(f"# {time_now}, Center:{center_freq}, Bandwidth:{bandwidth_freq}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s")
-            # writer = csv.writer(file)
-            # writer.writerow([f"# {time_now}, Center:{center_freq}, Bandwidth:{bandwidth_freq}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s"])
+        # if 'log.csv' in os.listdir(file_dir):
+        #     with open('log.csv', 'a') as file:
+        #         writer = csv.writer(file)
+        #         writer.writerow(log_row)
+        # else:
+        #     with open('log.csv', 'w', newline='') as file:
+        #         writer = csv.writer(file) 
+        #         writer.writerow(header)
+        #         writer.writerow(log_row)
+
+        # with open(file_name,'a') as file:
+        #     file.write(f"# {time_now}, Center:{center_freq}, Bandwidth:{bandwidth_freq}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s")
+        #     # writer = csv.writer(file)
+        #     # writer.writerow([f"# {time_now}, Center:{center_freq}, Bandwidth:{bandwidth_freq}, Az:{azimuth}, Alt:{altitude}, Int_time:{int_time}s"])
         
 
         #with open(file_name, mode ='r')as file:
-        csvFile = pd.read_csv(file_path, header=None, comment='#')
+        print(f"file_path: {file_path}\nfile_name: {file_name}")
+        plot_recorded_data(filepath=file_path, filename=file_name)
         
-            
-        x_start = csvFile.iloc[0, 2] / 1e6
-        x_stop = csvFile.iloc[0, 3] / 1e6
-        x_data = np.linspace(x_start, x_stop, num=len(csvFile.columns) - 6)
-        y_data = csvFile.iloc[0, 6:].values.astype(float)
-        
-        ax.plot(x_data,y_data)
-        ax.set_xlabel('Frequency (MHz)')
-        ax.set_ylabel('Power (dBm)')
-        ax.set_title('Recorded Data')
-        canvas.draw()
-        message = f"Data recorded and plotted from {file_name}"
-        add_message(message)
+
+
 
 def clear_plot():
     # Clear the plot in the first tab
@@ -665,49 +791,70 @@ bandwidth_entry.grid(row=1,column=1,sticky="nesw")
 bandwidth_unit_label = tk.Label(record_data_tab, text="Hz")
 bandwidth_unit_label.grid(row=1,column=2,sticky="w",padx=(5,0))
 
+def enable_entry():
+    if switching_var.get():
+        # print(switching_var)
+        shift_entry.config(state="normal")
+        # bandwidth_entry.config(state="disabled")
+    else:
+        shift_entry.config(state="disabled")
+        # bandwidth_entry.config(state="normal")
+
+shift_label = tk.Label(record_data_tab, text="Shift:")
+shift_label.grid(row=2, column=0)
+shift_entry = tk.Entry(record_data_tab, width=10, state="disabled")
+# shift_entry.insert(0, '0.5M')
+shift_entry.grid(row=2,column=1,sticky="nesw")
+shift_unit_label = tk.Label(record_data_tab, text="Hz")
+shift_unit_label.grid(row=2,column=2,sticky="w",padx=(5,0))
+switching = tk.Checkbutton(record_data_tab, text="Frequency switching")
+switching_var = tk.IntVar()
+switching.config(variable=switching_var, command=enable_entry)
+switching.grid(row=2,column=2,sticky="e")
+
 bin_sz_label = tk.Label(record_data_tab, text="Bin Size:")
 # bin_sz_label.pack(anchor="w")
-bin_sz_label.grid(row=2,column=0)
+bin_sz_label.grid(row=3,column=0)
 bin_sz_entry = tk.Entry(record_data_tab, width=10)
 bin_sz_entry.insert(0, '4k')
 # bin_sz_entry.pack(anchor="w")
-bin_sz_entry.grid(row=2,column=1,sticky="nesw")
+bin_sz_entry.grid(row=3,column=1,sticky="nesw")
 bin_sz_unit_label = tk.Label(record_data_tab, text="Hz")
-bin_sz_unit_label.grid(row=2,column=2,sticky="w",padx=(5,0))
+bin_sz_unit_label.grid(row=3,column=2,sticky="w",padx=(5,0))
 
 gain_label = tk.Label(record_data_tab, text="Gain:")
 # gain_label.pack(anchor="w")
-gain_label.grid(row=3,column=0)
+gain_label.grid(row=4,column=0)
 gain_entry = tk.Entry(record_data_tab, width=10)
 gain_entry.insert(0, '50')
 # gain_entry.pack(anchor="w")
-gain_entry.grid(row=3,column=1,sticky="nesw")
+gain_entry.grid(row=4,column=1,sticky="nesw")
 gain_unit_label = tk.Label(record_data_tab, text="")
-gain_unit_label.grid(row=3,column=2)
+gain_unit_label.grid(row=4,column=2)
 
 int_time_label = tk.Label(record_data_tab, text="Integration Time:")
 # int_time_label.pack(anchor="w")
-int_time_label.grid(row=4,column=0)
+int_time_label.grid(row=5,column=0)
 int_time_entry = tk.Entry(record_data_tab, width=10)
 int_time_entry.insert(0, '60')
 # int_time_entry.pack(anchor="w")
-int_time_entry.grid(row=4,column=1,sticky="nesw")
+int_time_entry.grid(row=5,column=1,sticky="nesw")
 int_time_unit_label = tk.Label(record_data_tab, text="s")
-int_time_unit_label.grid(row=4,column=2,sticky="w",padx=(5,0))
+int_time_unit_label.grid(row=5,column=2,sticky="w",padx=(5,0))
 
 az_label = tk.Label(record_data_tab, text="Azimuth:")
-az_label.grid(row=5,column=0)
+az_label.grid(row=6,column=0)
 az_entry = tk.Entry(record_data_tab, width=10)
-az_entry.grid(row=5,column=1,sticky="nesw")
+az_entry.grid(row=6,column=1,sticky="nesw")
 az_unit_label = tk.Label(record_data_tab, text="°")
-az_unit_label.grid(row=5,column=2,sticky="w",padx=(5,0))
+az_unit_label.grid(row=6,column=2,sticky="w",padx=(5,0))
 
 alt_label = tk.Label(record_data_tab, text="Altitude:")
-alt_label.grid(row=6,column=0)
+alt_label.grid(row=7,column=0)
 alt_entry = tk.Entry(record_data_tab, width=10)
-alt_entry.grid(row=6,column=1,sticky="nesw")
+alt_entry.grid(row=7,column=1,sticky="nesw")
 alt_unit_label = tk.Label(record_data_tab, text="°")
-alt_unit_label.grid(row=6,column=2,sticky="w",padx=(5,0))
+alt_unit_label.grid(row=7,column=2,sticky="w",padx=(5,0))
 
 record_data_button = tk.Button(record_data_tab, text="Record Data".ljust(14,' '), command=record_and_plot_data)
 # record_data_button.pack(side=tk.LEFT, padx=5, pady=5)
@@ -721,13 +868,13 @@ clear_plot_button.grid(row=0,column=5, padx=5, pady=(25,0), rowspan=2,columnspan
 # Add a time left text
 time_left_label = tk.Label(record_data_tab, text="Time left:".ljust(16,' '))
 # time_left_label.pack(anchor="w")
-time_left_label.grid(row=2,column=3, rowspan=5, columnspan=4,sticky="nesw")
+time_left_label.grid(row=2,column=3, rowspan=6, columnspan=4,sticky="nesw")
 time_left_label.config(font=("Courier", 32))
 
 # Create a container for the plot and toolbar
 plot_frame = tk.Frame(record_data_tab)
 # plot_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-plot_frame.grid(row=7,column=0,padx=10,pady=10,columnspan=7,sticky='nesw')
+plot_frame.grid(row=8,column=0,padx=10,pady=10,columnspan=7,sticky='nesw')
 
 # Create a matplotlib figure
 fig = Figure(figsize=(8, 6), dpi=100)
@@ -736,7 +883,7 @@ ax = fig.add_subplot(111)
 # Create a canvas for the figure
 canvas = FigureCanvasTkAgg(fig, master=plot_frame)
 # canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-canvas.get_tk_widget().grid(row=7,column=0,padx=20,pady=20,columnspan=7,sticky='nesw')
+canvas.get_tk_widget().grid(row=8,column=0,padx=20,pady=20,columnspan=7,sticky='nesw')
 
 # Create a label to display the file name
 file_name_label = tk.Label(record_data_tab, text="")
