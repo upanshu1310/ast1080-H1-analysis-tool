@@ -229,6 +229,7 @@ def record_and_plot_data():
             int_time = int_time_entry.get()
             azimuth = az_entry.get()
             altitude = alt_entry.get()
+            recentFiles = []
 
             for i in range(4):
                 start_freq, stop_freq, center_freq_from_function = calculate_start_stop_freq(center=center_freq, bandwidth=bandwidth_freq, shift=shift_freq, pos=i)
@@ -240,6 +241,7 @@ def record_and_plot_data():
                 # command = 'rtl_power -f '+start_freq+':'+stop_freq+':'+bin_sz+' -g '+gain+' -i '+int_time+' -1 '
                 args = shlex.split(command)
                 # print(args)
+                recentFiles.append(filename)
                 
                 p = subprocess.Popen(args, bufsize=1, start_new_session=True)
                 record_data_button.config(text="Stop Recording")
@@ -255,7 +257,8 @@ def record_and_plot_data():
                 # print(f"file_path: {file_dir+'/'+filename}\nfile_name: {filename}")
                 # plot_recorded_data(filepath=path, filename=filename)
 
-            newFolder = f"cen{center_freq}_ban{bandwidth_freq}_shift{shift_freq}_{int_time}s"
+            # newFolder = f"cen{center_freq}_ban{bandwidth_freq}_shift{shift_freq}_{int_time}s"
+            newFolder = file_name[:-4]
             # print(newFolder)
             # if not os.path.isdir(newFolder):
             #     print("exists")
@@ -269,10 +272,9 @@ def record_and_plot_data():
                 os.makedirs(newFolder)
             
             for file in files(file_dir):
-                if file == 'log.csv':
-                    continue
-                # print(file_dir+'/'+file)
-                os.replace(f"{file_dir}/{file}", f"{file_dir}/{newFolder}/{file}")
+                if file in recentFiles:
+                    # continue``
+                    os.replace(f"{file_dir}/{file}", f"{file_dir}/{newFolder}/{file}")
 
 
             return
@@ -312,7 +314,7 @@ def record_and_plot_data():
             startTimer(int(int_time))
             time.sleep(1)
 
-        update_log(directory=file_dir, filename=file_name, time=time_now)
+        update_log(directory=file_dir, filename=file_name, time_=time_now)
 
         # header = ["date_time", "filename", "center_freq", "bandwidth", "az", "alt", "integration_time"]
         # log_row = [time_now, file_name, center_freq, bandwidth_freq, azimuth, altitude, int_time]
